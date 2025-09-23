@@ -65,9 +65,12 @@ def make_robot_from_config(config: RobotConfig) -> Robot:
         from tests.mocks.mock_robot import MockRobot
 
         return MockRobot(config)
+    elif config.type == "piper":
+        from .piper import Piper
+
+        return Piper(config)
     else:
         raise ValueError(config.type)
-
 
 # TODO(pepijn): Move to pipeline step to make sure we don't have to do this in the robot code and send action to robot is clean for use in dataset
 def ensure_safe_goal_position(
