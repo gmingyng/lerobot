@@ -81,34 +81,24 @@ class PiperRobotConfig(RobotConfig):
 @RobotConfig.register_subclass("piper")
 @dataclass
 class PiperConfig(RobotConfig):
-    """
-    TODO: Add a description of your robot here.
-    """
-    # TODO: Add and modify parameters to match your robot's hardware and needs.
-    # Example: Port to connect to the arm.
     port: str = "can0"
 
-    disable_torque_on_disconnect: bool = True
+    # disable_torque_on_disconnect: bool = True
 
     # `max_relative_target` limits the magnitude of the relative positional target vector for safety purposes.
     # Set this to a positive scalar to have the same value for all motors, or a dictionary that maps motor
     # names to the max_relative_target value for that motor.
-    max_relative_target: float | dict[str, float] | None = None
+    # max_relative_target: float | dict[str, float] | None = None
 
-    # cameras
-    cameras: dict[str, OpenCVCameraConfig] = field(
-        default_factory=lambda: {
-            "right_wrist_camera": OpenCVCameraConfig(
-                # TODO: Replace with your camera's actual serial number found with `lerobot-find-cameras realsense`.
-                serial_number_or_name="0123456789",
-                width=640,
-                height=480,
+    cameras: dict[str, CameraConfig] = field(
+        default_factory={
+            "wrist_camera": OpenCVCameraConfig(
+                index_or_path=0,
                 fps=30,
-                # D435i provides depth, so we enable it.
-                use_depth=True,
-            )
+                width=480,
+                height=640,
+            ),
         }
     )
-
     # Set to `True` for backward compatibility with previous policies/dataset
-    use_degrees: bool = False
+    # use_degrees: bool = False
