@@ -143,7 +143,7 @@ class DatasetRecordConfig:
     # Number of episodes to record.
     num_episodes: int = 50
     # Encode frames in the dataset into video
-    video: bool = True
+    video: bool = False
     # Upload dataset to Hugging Face hub.
     push_to_hub: bool = True
     # Upload on private repository on the Hugging Face hub.
@@ -288,6 +288,11 @@ def record_loop(
         preprocessor.reset()
         postprocessor.reset()
 
+    from collections import deque
+
+    history = deque()
+    ACTION_HORIZON = 3
+
     timestamp = 0
     start_episode_t = time.perf_counter()
     while timestamp < control_time_s:
@@ -366,9 +371,21 @@ def record_loop(
 
         # Write to dataset
         if dataset is not None:
-            action_frame = build_dataset_frame(dataset.features, action_values, prefix="action")
-            frame = {**observation_frame, **action_frame, "task": single_task}
-            dataset.add_frame(frame)
+            history.append((observation_frame, obs_processed))
+
+            if len(history) > ACTION_HORIZON:
+                past_obs_frame, _ = history.popleft()
+
+                # The action for this past_obs_frame is the state from the current obs_processed
+                future_state_as_action = {
+                    name: obs_processed["state_dict"][name] for name in dataset.features["action"]["names"]
+                }
+
+                action_frame = build_dataset_frame(
+                    dataset.features, future_state_as_action, prefix="action"
+                )
+                frame = {**past_obs_frame, **action_frame, "task": single_task}
+                dataset.add_frame(frame)
 
         if display_data:
             log_rerun_data(observation=obs_processed, action=action_values)
@@ -377,6 +394,15 @@ def record_loop(
         busy_wait(1 / fps - dt_s)
 
         timestamp = time.perf_counter() - start_episode_t
+
+    if dataset is not None:
+        # For the last steps, action is the same as state
+        while history:
+            obs_frame, obs = history.popleft()
+            state_as_action = {name: obs["state_dict"][name] for name in dataset.features["action"]["names"]}
+            action_frame = build_dataset_frame(dataset.features, state_as_action, prefix="action")
+            frame = {**obs_frame, **action_frame, "task": single_task}
+            dataset.add_frame(frame)
 
 
 @parser.wrap()

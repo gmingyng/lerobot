@@ -56,8 +56,8 @@ class Piper(Robot):
         motor_features = {}
         # Arm: joint_1 to joint_6 and gripper
         for i in range(1, 7):
-            motor_features[f"joint_{i}.pos"] = float
-        motor_features["gripper.pos"] = float
+            motor_features[f"joint_{i}"] = float
+        motor_features["gripper"] = float
 
         return motor_features
 
@@ -168,7 +168,7 @@ class Piper(Robot):
         try:
             # Extract joint values using direct attribute access
             for i in range(1, 7):
-                joint_key = f"joint_{i}.pos"
+                joint_key = f"joint_{i}"
                 try:
                     # Access joint value using joint_msgs.joint_state.joint_{i}
                     joint_attr = f"joint_{i}"
@@ -186,7 +186,7 @@ class Piper(Robot):
             logger.error(f"Error parsing joint messages: {e}")
             # Fallback: set all joints to 0
             for i in range(1, 7):
-                observation[f"joint_{i}.pos"] = 0.0
+                observation[f"joint_{i}"] = 0.0
 
     def _parse_gripper_messages(self, gripper_msgs, observation: dict) -> None:
         """
@@ -198,14 +198,14 @@ class Piper(Robot):
             # Access gripper_state.grippers_angle - convert from 0.001mm to mm
             angle_raw = gripper_msgs.gripper_state.grippers_angle
             angle_mm = float(angle_raw) / 1000.0
-            observation[f"gripper.pos"] = angle_mm
+            observation[f"gripper"] = angle_mm
             logger.debug(f"gripper position: {angle_mm}mm (raw: {angle_raw})")
 
         except Exception as e:
             logger.error(f"Error parsing gripper messages: {e}")
             logger.error(f"Gripper message type: {type(gripper_msgs)}")
             logger.error(f"Gripper message content: {gripper_msgs}")
-            observation[f"gripper.pos"] = 0.0
+            observation[f"gripper"] = 0.0
 
     def send_action(self, action: dict) -> None:
         """
