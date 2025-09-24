@@ -193,8 +193,8 @@ class RecordConfig:
             self.policy = PreTrainedConfig.from_pretrained(policy_path, cli_overrides=cli_overrides)
             self.policy.pretrained_path = policy_path
 
-        # if self.teleop is None and self.policy is None:
-        #     raise ValueError("Choose a policy, a teleoperator or both to control the robot")
+        if self.teleop is None and self.policy is None:
+            raise ValueError("Choose a policy, a teleoperator or both to control the robot")
 
     @classmethod
     def __get_path_fields__(cls) -> list[str]:
@@ -338,18 +338,13 @@ def record_loop(
             act = {**arm_action, **base_action} if len(base_action) > 0 else arm_action
             act_processed_teleop = teleop_action_processor((act, obs))
         else:
-            # MODIFICATION START: Instead of skipping, generate a null action.
-            logging.info("No policy or teleoperator provided. Generating null actions (all zeros).")
-            
-            # 从数据集中获取期望的动作名称，以构建结构正确的动作字典
-            action_names = dataset.features["action"]["names"]
-            null_action = {name: 0.0 for name in action_names}
-            
-            # 原始代码期望一个 (action, observation) 元组作为处理器的输入
-            # 我们将输出命名为 act_processed_teleop，以便后续的代码块能够正确工作
-            act_processed_teleop = teleop_action_processor((null_action, obs))
-            # MODIFICATION END
-            
+            logging.info(
+                "No policy or teleoperator provided, skipping action generation."
+                "This is likely to happen when resetting the environment without a teleop device."
+                "The robot won't be at its rest position at the start of the next episode."
+            )
+            continue
+
         # Applies a pipeline to the action, default is IdentityProcessor
         if policy is not None and act_processed_policy is not None:
             action_values = act_processed_policy

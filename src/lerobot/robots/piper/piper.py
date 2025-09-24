@@ -21,10 +21,11 @@ from typing import Any
 from lerobot.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
 from ..robot import Robot
+from piper_sdk import *
 from lerobot.cameras import make_cameras_from_configs
-from lerobot.motors import Motor, MotorNormMode
-from lerobot.motors.feetech import FeetechMotorsBus
-from lerobot.motors.piper_motor import PiperMotorsBus
+# from lerobot.motors import Motor, MotorNormMode
+# from lerobot.motors.feetech import FeetechMotorsBus
+# from lerobot.motors.piper_motor import PiperMotorsBus
 
 from .config_piper import PiperConfig
 
@@ -92,7 +93,7 @@ class Piper(Robot):
         try:
             # Connect left arm
             logger.info(f"Connecting to arm on CAN port: {self.config.port}")
-            self._arm_connected = self.C_PiperInterface_V2(self.config.port)
+            self._arm_connected = C_PiperInterface_V2(self.config.port)
             self._arm_connected.ConnectPort(True)
 
             # Connect cameras
@@ -126,7 +127,7 @@ class Piper(Robot):
         except Exception as e:
             logger.error(f"Error during Piper robot disconnect: {e}")
 
-    def capture_observation(self) -> dict:
+    def get_observation(self) -> dict:
         """
         Capture current joint positions and camera images
         """
