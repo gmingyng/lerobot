@@ -43,12 +43,14 @@ class Piper(Robot):
 
     def __init__(self, config: PiperConfig):
         super().__init__(config)
-        self.config = config
+        self._config = config
         # TODO: Initialize your robot's hardware interface here.
-        # Example: self.bus = MyRobotBus(port=self.config.port)
+        # Example: self.bus = MyRobotBus(port=self._config.port)
         # Example: self.cameras = make_cameras_from_configs(config.cameras)
         self.cameras = make_cameras_from_configs(config.cameras)
-        self._arm_connected = None
+        self._piper = None
+        self._end_pose_factor = 1000  # Scale factor for end-effector position commands
+        self._move_spd_rate_ctrl = 40 # Speed rate for movement control
 
     @property
     def _motors_ft(self) -> dict[str, type]:
@@ -64,7 +66,7 @@ class Piper(Robot):
     @property
     def _cameras_ft(self) -> dict[str, tuple]:
         return {
-            cam: (self.config.cameras[cam].height, self.config.cameras[cam].width, 3) for cam in self.cameras
+            cam: (self._config.cameras[cam].height, self._config.cameras[cam].width, 3) for cam in self.cameras
         }
     
     @cached_property
@@ -85,16 +87,16 @@ class Piper(Robot):
 
     @property
     def is_connected(self) -> bool:
-        arm_connected = self._arm_connected is not None
+        arm_connected = self._piper is not None
         cameras_connected = all(cam.is_connected for cam in self.cameras.values())
         return arm_connected and cameras_connected
 
     def connect(self, calibrate: bool = True) -> None:
         try:
             # Connect left arm
-            logger.info(f"Connecting to arm on CAN port: {self.config.port}")
-            self._arm_connected = C_PiperInterface_V2(self.config.port)
-            self._arm_connected.ConnectPort(True)
+            logger.info(f"Connecting to arm on CAN port: {self._config.port}")
+            self._piper = C_PiperInterface_V2(self._config.port)
+            self._piper.ConnectPort(can_init=True)
 
             # Connect cameras
             for cam in self.cameras.values():
@@ -111,13 +113,13 @@ class Piper(Robot):
         Disconnect from the Piper arm and cameras
         """
         try:
-            if self._arm_connected is not None:
+            if self._piper is not None:
                 try:
-                    self._arm_connected.DisconnectPort()
+                    self._piper.DisconnectPort()
                     logger.info("Arm disconnected from CAN port")
                 except Exception as e:
                     logger.warning(f"Error disconnecting arm: {e}")
-                self._arm_connected = None
+                self._piper = None
 
             for cam in self.cameras.values():
                 cam.disconnect()
@@ -136,26 +138,22 @@ class Piper(Robot):
 
         observation = {}
 
-        try:
-            # Get arm joint positions
-            joint_msgs = self._arm_connected.GetArmJointMsgs()
-            gripper_msgs = self._arm_connected.GetArmGripperMsgs()
+        # Get arm joint positions
+        joint_msgs = self._piper.GetArmJointMsgs()
+        gripper_msgs = self._piper.GetArmGripperMsgs()
 
-            # Parse joint positions for the arm
-            # Based on the format: ArmMsgFeedBackJointStates with Joint 1-6 values
-            self._parse_joint_messages(joint_msgs, observation)
+        # Parse joint positions for the arm
+        # Based on the format: ArmMsgFeedBackJointStates with Joint 1-6 values
+        self._parse_joint_messages(joint_msgs, observation)
 
-            # Parse gripper position for the arm
-            # Based on the format: ArmMsgFeedBackGripper with grippers_angle
-            self._parse_gripper_messages(gripper_msgs, observation)
+        # Parse gripper position for the arm
+        # Based on the format: ArmMsgFeedBackGripper with grippers_angle
+        self._parse_gripper_messages(gripper_msgs, observation)
 
-            # Capture camera images
-            for cam_name, cam in self.cameras.items():
-                observation[cam_name] = cam.async_read()
+        # Capture camera images
+        for cam_name, cam in self.cameras.items():
+            observation[cam_name] = cam.async_read()
 
-        except Exception as e:
-            logger.error(f"Error capturing observation: {e}")
-            raise
 
         return observation
 
@@ -212,14 +210,23 @@ class Piper(Robot):
         Send action to the Piper arm
         Note: This is a placeholder since you mentioned the robot movement is handled separately
         """
-        if not self.is_connected:
+        if not self._piper:
             raise RuntimeError("Piper robot is not connected")
 
-        # Since you mentioned that robot movement is handled separately,
-        # we don't need to implement actual movement commands here
-        # This method is required by the Robot interface but can be a no-op
         logger.debug("send_action called - movement handled separately")
-        pass
+        print("Action received: ", action)
+
+        # X = round(action["names"]["delta_x"]*self._end_pose_factor)
+        # Y = round(position[1]*self._end_pose_factor)
+        # Z = round(position[2]*self._end_pose_factor)
+        # RX = round(position[3]*self._end_pose_factor)
+        # RY = round(position[4]*self._end_pose_factor)
+        # RZ = round(position[5]*self._end_pose_factor)
+        # joint_6 = round(position[6]*self._end_pose_factor)
+        # print("End pose Ctrl: ", X,Y,Z,RX,RY,RZ)
+        # self._piper.MotionCtrl_2(0x01, 0x00, self._move_spd_rate_ctrl, 0x00)
+        # self._piper.EndPoseCtrl(X,Y,Z,RX,RY,RZ)
+        # self._piper.GripperCtrl(abs(joint_6), 1000, 0x01, 0)
 
     @property
     def is_calibrated(self) -> bool:
