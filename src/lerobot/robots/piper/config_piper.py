@@ -21,62 +21,6 @@ from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
 
 
 from ..config import RobotConfig
-# from lerobot.motors.configs import PiperMotorsBusConfig
-# from lerobot.motors.configs import MotorsBusConfig
-
-# @RobotConfig.register_subclass("piper_old")
-# @dataclass
-# class PiperRobotConfig(RobotConfig):
-#     inference_time: bool
-    
-#     follower_arm: dict[str, MotorsBusConfig] = field(
-#         default_factory=lambda: {
-#             "main": PiperMotorsBusConfig(
-#                 can_name="can0",
-#                 motors={
-#                     # name: (index, model)
-#                     "joint_1": [1, "agilex_piper"],
-#                     "joint_2": [2, "agilex_piper"],
-#                     "joint_3": [3, "agilex_piper"],
-#                     "joint_4": [4, "agilex_piper"],
-#                     "joint_5": [5, "agilex_piper"],
-#                     "joint_6": [6, "agilex_piper"],
-#                     "gripper": (7, "agilex_piper"),
-#                 },
-#             ),
-#         }
-#     )
-
-#     cameras: dict[str, CameraConfig] = field(
-#         default_factory=lambda: {
-#             "one": OpenCVCameraConfig(
-#                 camera_index=0,
-#                 fps=30,
-#                 width=640,
-#                 height=480,
-#             ),
-#             "two": OpenCVCameraConfig(
-#                 camera_index=2,
-#                 fps=30,
-#                 width=640,
-#                 height=480,
-#             ),
-#             # "cam_left_wrist": IntelRealSenseCameraConfig(
-#             #     serial_number=218622272670,
-#             #     fps=30,
-#             #     width=640,
-#             #     height=480,
-#             # ),
-#             # "cam_right_wrist": IntelRealSenseCameraConfig(
-#             #     serial_number=130322272300,
-#             #     fps=30,
-#             #     width=640,
-#             #     height=480,
-#             # ),
-
-#         }
-#     )
-
 
 
 @RobotConfig.register_subclass("piper")
@@ -93,12 +37,25 @@ class PiperConfig(RobotConfig):
 
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
-            "wrist_camera": OpenCVCameraConfig(
+            "cam_right_wrist": OpenCVCameraConfig(
                 index_or_path=4,
                 fps=30,
                 width=640,
                 height=480,
             ),
+            # "cam_left_wrist": OpenCVCameraConfig(
+            #     index_or_path=5,
+            #     fps=30,
+            #     width=640,
+            #     height=480,
+            # ),    
+            # "cam_high": OpenCVCameraConfig(
+            #     index_or_path=6,
+            #     fps=30,
+            #     width=640,
+            #     height=480,
+            # ),    
+
         }
     )
     # Set to `True` for backward compatibility with previous policies/dataset

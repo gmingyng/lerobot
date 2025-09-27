@@ -50,7 +50,13 @@ class Piper(Robot):
         self.cameras = make_cameras_from_configs(config.cameras)
         self._piper = None
         self._end_pose_factor = 1000  # Scale factor for end-effector position commands
+        self._joint_factor = 57295.7795 #1000*180/3.1415926
+        self._gripper_factor = 1000.0 # Scale factor for gripper position commands
         self._move_spd_rate_ctrl = 40 # Speed rate for movement control
+
+    @cached_property
+    def joint_factor(self):
+        return self._joint_factor
 
     @property
     def _motors_ft(self) -> dict[str, type]:
@@ -154,7 +160,6 @@ class Piper(Robot):
         for cam_name, cam in self.cameras.items():
             observation[cam_name] = cam.async_read()
 
-
         return observation
 
     def _parse_joint_messages(self, joint_msgs, observation: dict) -> None:
@@ -163,28 +168,15 @@ class Piper(Robot):
         Expected format: joint_msgs.joint_state.joint_1, joint_msgs.joint_state.joint_2, etc.
         """
 
-        try:
-            # Extract joint values using direct attribute access
-            for i in range(1, 7):
-                joint_key = f"joint_{i}"
-                try:
-                    # Access joint value using joint_msgs.joint_state.joint_{i}
-                    joint_attr = f"joint_{i}"
-                    joint_value = getattr(joint_msgs.joint_state, joint_attr)
-                    observation[joint_key] = float(joint_value)
-                except AttributeError:
-                    logger.warning(f"Joint {i} attribute not found in joint_state")
-                    observation[joint_key] = 0.0
-                except (ValueError, TypeError):
-                    logger.warning(f"Could not parse joint {i} value")
-                    observation[joint_key] = 0.0
+        for i in range(1, 7):
+            joint_key = f"joint_{i}"
+            try:
+                raw_value = getattr(joint_msgs.joint_state, joint_key)
+                observation[joint_key] = float(raw_value) / self._joint_factor
+            except (AttributeError, ValueError, TypeError) as e:
+                logger.warning(f"Could not parse {joint_key} due to '{e.__class__.__name__}'. Defaulting to 0.0.")
+                observation[joint_key] = 0.0
 
-
-        except Exception as e:
-            logger.error(f"Error parsing joint messages: {e}")
-            # Fallback: set all joints to 0
-            for i in range(1, 7):
-                observation[f"joint_{i}"] = 0.0
 
     def _parse_gripper_messages(self, gripper_msgs, observation: dict) -> None:
         """
@@ -195,15 +187,14 @@ class Piper(Robot):
         try:
             # Access gripper_state.grippers_angle - convert from 0.001mm to mm
             angle_raw = gripper_msgs.gripper_state.grippers_angle
-            angle_mm = float(angle_raw) / 1000.0
+            angle_mm = float(angle_raw) / self._gripper_factor
             observation[f"gripper"] = angle_mm
             logger.debug(f"gripper position: {angle_mm}mm (raw: {angle_raw})")
 
         except Exception as e:
             logger.error(f"Error parsing gripper messages: {e}")
-            logger.error(f"Gripper message type: {type(gripper_msgs)}")
-            logger.error(f"Gripper message content: {gripper_msgs}")
-            observation[f"gripper"] = 0.0
+            logger.debug(f"Gripper message content for debugging: {gripper_msgs}")
+            observation["gripper"] = 0.0
 
     def send_action(self, action: dict) -> None:
         """
