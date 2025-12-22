@@ -58,6 +58,7 @@ python -m lerobot.record \
 """
 
 import logging
+import os
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -133,9 +134,9 @@ class DatasetRecordConfig:
     # Number of episodes to record.
     num_episodes: int = 50
     # Encode frames in the dataset into video
-    video: bool = False
+    video: bool = True
     # Upload dataset to Hugging Face hub.
-    push_to_hub: bool = True
+    push_to_hub: bool = False
     # Upload on private repository on the Hugging Face hub.
     private: bool = False
     # Add tags to your dataset on the hub.
@@ -201,6 +202,7 @@ def record_loop(
     control_time_s: int | None = None,
     single_task: str | None = None,
     display_data: bool = False,
+    loop_type: str = "episode",
 ):
     if dataset is not None and dataset.fps != fps:
         raise ValueError(f"The dataset fps should be equal to requested fps ({dataset.fps} != {fps}).")
@@ -226,9 +228,15 @@ def record_loop(
     if policy is not None:
         policy.reset()
 
+    try:
+        terminal_width = os.get_terminal_size().columns
+    except OSError:
+        terminal_width = 80  # Fallback width
+
     history = deque()
     timestamp = 0
     start_episode_t = time.perf_counter()
+
     while timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
@@ -263,8 +271,8 @@ def record_loop(
 
             action = {**arm_action, **base_action} if len(base_action) > 0 else arm_action
         else:
-            action = {name: 0.0 for name in robot.action_features}
-            
+            # action = {name: 0.0 for name in robot.action_features}
+            action = robot.get_piper_ctrl()
             # logging.info(
             #     "No policy or teleoperator provided, skipping action generation."
             #     "This is likely to happen when resetting the environment without a teleop device."
@@ -278,22 +286,29 @@ def record_loop(
         sent_action = robot.send_action(action)
 
         if dataset is not None:
-            history.append((observation_frame, observation))
+            # history.append((observation_frame, observation))
 
-            if len(history) > ACTION_HORIZON:
-                past_obs_frame, _ = history.popleft()
+            # if len(history) > ACTION_HORIZON:
+            #     past_obs_frame, _ = history.popleft()
 
-                # The action for this past_obs_frame is the state from the current obs_processed
-                future_state_as_action = {
-                    name: observation[name] for name in dataset.features["action"]["names"]
-                }
+            #     # The action for this past_obs_frame is the state from the current obs_processed
+            #     future_state_as_action = {
+            #         name: observation[name] for name in dataset.features["action"]["names"]
+            #     }
+
+            #     action_frame = build_dataset_frame(
+            #         dataset.features, future_state_as_action, prefix="action"
+            #     )
+                # frame = {**past_obs_frame, **action_frame}
+                # dataset.add_frame(frame, task=single_task)
+                # action = future_state_as_action
 
                 action_frame = build_dataset_frame(
-                    dataset.features, future_state_as_action, prefix="action"
+                    dataset.features, action, prefix="action"
                 )
-                frame = {**past_obs_frame, **action_frame}
+
+                frame = {**observation_frame, **action_frame}
                 dataset.add_frame(frame, task=single_task)
-                action = future_state_as_action
 
             # action_frame = build_dataset_frame(dataset.features, sent_action, prefix="action")
             # frame = {**observation_frame, **action_frame}
@@ -306,15 +321,34 @@ def record_loop(
         busy_wait(1 / fps - dt_s)
 
         timestamp = time.perf_counter() - start_episode_t
-        
-    if dataset is not None:
-        # For the last steps, action is the same as state
-        while history:
-            obs_frame, obs = history.popleft()
-            state_as_action = {name: obs[name] for name in dataset.features["action"]["names"]}
-            action_frame = build_dataset_frame(dataset.features, state_as_action, prefix="action")
-            frame = {**obs_frame, **action_frame}
-            dataset.add_frame(frame, task=single_task)
+
+        if control_time_s is not None:
+            remaining_time = int(max(0, control_time_s - timestamp))
+
+            if loop_type == "episode":
+                text = f"Episode remaining time: {remaining_time:02d}s"
+                color_code = "\033[92m"  # Green
+            else:  # reset
+                text = f"Reset remaining time: {remaining_time:02d}s"
+                color_code = "\033[94m"  # Blue
+
+            padding = " " * ((terminal_width - len(text)) // 2)
+
+            # Single-line, centered, colored countdown
+            print(f"{padding}{color_code}{text}\033[0m", end="\r", flush=True)
+
+    if control_time_s is not None:
+        # Clear the countdown line
+        print(" " * terminal_width, end="\r")
+
+    # if dataset is not None:
+    #     # For the last steps, action is the same as state
+    #     while history:
+    #         obs_frame, obs = history.popleft()
+    #         state_as_action = {name: obs[name] for name in dataset.features["action"]["names"]}
+    #         action_frame = build_dataset_frame(dataset.features, state_as_action, prefix="action")
+    #         frame = {**obs_frame, **action_frame}
+    #         dataset.add_frame(frame, task=single_task)
 
 
 @parser.wrap()
@@ -382,6 +416,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                 control_time_s=cfg.dataset.episode_time_s,
                 single_task=cfg.dataset.single_task,
                 display_data=cfg.display_data,
+                loop_type="episode",
             )
 
             # Execute a few seconds without recording to give time to manually reset the environment
@@ -398,6 +433,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                     control_time_s=cfg.dataset.reset_time_s,
                     single_task=cfg.dataset.single_task,
                     display_data=cfg.display_data,
+                    loop_type="reset",
                 )
 
             if events["rerecord_episode"]:
@@ -424,7 +460,6 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
     log_say("Exiting", cfg.play_sounds)
     return dataset
-
 
 def main():
     record()

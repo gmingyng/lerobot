@@ -38,7 +38,7 @@ class PiperConfig(RobotConfig):
     cameras: dict[str, CameraConfig] = field(
         default_factory=lambda: {
             "cam_right_wrist": OpenCVCameraConfig(
-                index_or_path=4,
+                index_or_path=10,
                 fps=30,
                 width=640,
                 height=480,
@@ -49,12 +49,12 @@ class PiperConfig(RobotConfig):
             #     width=640,
             #     height=480,
             # ),    
-            # "cam_high": OpenCVCameraConfig(
-            #     index_or_path=6,
-            #     fps=30,
-            #     width=640,
-            #     height=480,
-            # ),    
+            "cam_high": OpenCVCameraConfig(
+                index_or_path=4,
+                fps=30,
+                width=640,
+                height=480,
+            ),    
 
         }
     )

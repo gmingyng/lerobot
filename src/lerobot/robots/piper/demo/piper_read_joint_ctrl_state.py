@@ -9,9 +9,11 @@ from piper_sdk import *
 if __name__ == "__main__":
     piper = C_PiperInterface_V2()
     piper.ConnectPort()
+    time.sleep(1)
     while True:
         print(piper.GetArmJointMsgs())
         print(piper.GetArmGripperMsgs())
         print(piper.GetArmJointCtrl())
+        print(piper.GetArmGripperCtrl())
         time.sleep(0.005)
     

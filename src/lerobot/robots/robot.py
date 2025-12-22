@@ -183,3 +183,9 @@ class Robot(abc.ABC):
     def disconnect(self) -> None:
         """Disconnect from the robot and perform any necessary cleanup."""
         pass
+
+    def get_piper_ctrl(self):
+        """
+        for piper ctrl
+        """
+        raise NotImplementedError("这只鸟不会飞！")
