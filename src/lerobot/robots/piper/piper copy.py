@@ -27,19 +27,15 @@ from lerobot.cameras import make_cameras_from_configs
 # from lerobot.motors.feetech import FeetechMotorsBus
 # from lerobot.motors.piper_motor import PiperMotorsBus
 
-# Assume BiPiperConfig is defined in config_piper alongside PiperConfig
-try:
-    from .config_piper import PiperConfig, BiPiperConfig
-except ImportError:
-    from .config_piper import PiperConfig
-    BiPiperConfig = None # Fallback if not yet defined
+from .config_piper import PiperConfig
 
 logger = logging.getLogger(__name__)
 
 
 class Piper(Robot):
     """
-    Piper robot implementation for a single arm.
+    TODO: Add a description of your robot class here.
+    This class should handle the connection, control, and observation of your robot.
     """
 
     config_class = PiperConfig
@@ -48,15 +44,19 @@ class Piper(Robot):
     def __init__(self, config: PiperConfig):
         super().__init__(config)
         self._config = config
+        # TODO: Initialize your robot's hardware interface here.
+        # Example: self.bus = MyRobotBus(port=self._config.port)
+        # Example: self.cameras = make_cameras_from_configs(config.cameras)
         self.cameras = make_cameras_from_configs(config.cameras)
         self._piper = None
-        self._setup_constants()
+        self._joint_msg_factor = 1000.0 #1000*180/3.1415926
+        self._joint_ctrl_factor = 1000.0 #1000*180/3.1415926
+        self._gripper_factor = 1000.0 # Scale factor for gripper position commands
+        self._move_spd_rate_ctrl = 40 # Speed rate for movement control
 
-    def _setup_constants(self):
-        self._joint_msg_factor = 1000.0 
-        self._joint_ctrl_factor = 1000.0 
-        self._gripper_factor = 1000.0 
-        self._move_spd_rate_ctrl = 40 
+    # @cached_property
+    # def joint_factor(self):
+    #     return self._joint_msg_factor
 
     @property
     def _motors_ft(self) -> dict[str, type]:
@@ -99,7 +99,7 @@ class Piper(Robot):
 
     def connect(self, calibrate: bool = True) -> None:
         try:
-            # Connect arm
+            # Connect left arm
             logger.info(f"Connecting to arm on CAN port: {self._config.port}")
             self._piper = C_PiperInterface_V2(self._config.port)
             self._piper.ConnectPort()
@@ -149,9 +149,11 @@ class Piper(Robot):
         gripper_msgs = self._piper.GetArmGripperMsgs()
 
         # Parse joint positions for the arm
+        # Based on the format: ArmMsgFeedBackJointStates with Joint 1-6 values
         self._parse_joint_messages(joint_msgs, "state", observation)
 
         # Parse gripper position for the arm
+        # Based on the format: ArmMsgFeedBackGripper with grippers_angle
         self._parse_gripper_messages(gripper_msgs, "state", observation)
 
         # Capture camera images
@@ -181,38 +183,32 @@ class Piper(Robot):
 
         return ctrl
 
-    def _parse_joint_messages(self, joint_msgs, msg_type, observation: dict, prefix: str = "") -> None:
+    def _parse_joint_messages(self, joint_msgs, msg_type, observation: dict) -> None:
         """
         Parse joint messages from piper SDK format.
-        Args:
-            prefix: Prefix for dictionary keys (e.g. "left_" or "")
+        Expected format: joint_msgs.joint_state.joint_1, joint_msgs.joint_state.joint_2, etc.
         """
 
         for i in range(1, 7):
-            # SDK attribute is always joint_1, joint_2...
-            sdk_attr = f"joint_{i}"
-            # Output key can have prefix
-            joint_key = f"{prefix}joint_{i}"
-            
+            joint_key = f"joint_{i}"
             try:
                 if(msg_type == "state"):
-                    raw_value = getattr(joint_msgs.joint_state, sdk_attr)
+                    raw_value = getattr(joint_msgs.joint_state, joint_key)
                     observation[joint_key] = float(raw_value) / self._joint_msg_factor
                 elif(msg_type == "action"):
-                    raw_value = getattr(joint_msgs.joint_ctrl, sdk_attr)
+                    raw_value = getattr(joint_msgs.joint_ctrl, joint_key)
                     observation[joint_key] = float(raw_value) / self._joint_ctrl_factor
             except (AttributeError, ValueError, TypeError) as e:
                 logger.warning(f"Could not parse {joint_key} due to '{e.__class__.__name__}'. Defaulting to 0.0.")
                 observation[joint_key] = 0.0
 
 
-    def _parse_gripper_messages(self, gripper_msgs, msg_type, observation: dict, prefix: str = "") -> None:
+    def _parse_gripper_messages(self, gripper_msgs, msg_type, observation: dict) -> None:
         """
         Parse gripper messages from piper SDK format.
-        Args:
-            prefix: Prefix for dictionary keys (e.g. "left_" or "")
+        Expected format: ArmGripper object with gripper_state.grippers_angle attribute
+        grippers_angle is in 0.001mm units, needs conversion to mm.
         """
-        key_name = f"{prefix}gripper"
         try:
             angle_raw = 0.0
             if(msg_type == "state"):
@@ -221,21 +217,36 @@ class Piper(Robot):
             elif(msg_type == "action"):
                 angle_raw = gripper_msgs.gripper_ctrl.grippers_angle
             angle_mm = float(angle_raw) / self._gripper_factor
-            observation[key_name] = angle_mm
-            # logger.debug(f"gripper: {msg_type} command: {angle_raw}mm")
+            observation[f"gripper"] = angle_mm
+            logger.debug(f"gripper: {msg_type} command: {angle_raw}mm")
 
         except Exception as e:
             logger.error(f"Error parsing gripper messages: {e}")
             logger.debug(f"Gripper message content for debugging: {gripper_msgs}")
-            observation[key_name] = 0.0
+            observation["gripper"] = 0.0
 
     def send_action(self, action: dict) -> None:
         """
         Send action to the Piper arm
-        Note: This is a placeholder since robot movement is handled separately in lead-through
+        Note: This is a placeholder since you mentioned the robot movement is handled separately
         """
         if not self._piper:
             raise RuntimeError("Piper robot is not connected")
+
+        # logger.debug("send_action called - movement handled separately")
+        # print("Action received: ", action)
+
+        # X = round(action["names"]["delta_x"]*self._end_pose_factor)
+        # Y = round(position[1]*self._end_pose_factor)
+        # Z = round(position[2]*self._end_pose_factor)
+        # RX = round(position[3]*self._end_pose_factor)
+        # RY = round(position[4]*self._end_pose_factor)
+        # RZ = round(position[5]*self._end_pose_factor)
+        # joint_6 = round(position[6]*self._end_pose_factor)
+        # print("End pose Ctrl: ", X,Y,Z,RX,RY,RZ)
+        # self._piper.MotionCtrl_2(0x01, 0x00, self._move_spd_rate_ctrl, 0x00)
+        # self._piper.EndPoseCtrl(X,Y,Z,RX,RY,RZ)
+        # self._piper.GripperCtrl(abs(joint_6), 1000, 0x01, 0)
         pass
 
     @property
@@ -251,142 +262,4 @@ class Piper(Robot):
     def configure(self) -> None:
         """Configure the Piper robot - no specific configuration needed"""
         logger.info("Piper robot configuration - no action needed")
-        pass
-
-
-class BiPiper(Piper):
-    """
-    BiPiper robot implementation for dual arms (left and right).
-    """
-    config_class = BiPiperConfig
-    name = "bi_piper"
-
-    def __init__(self, config: Any):
-        # Skip Piper.__init__ to avoid single-arm setup, go straight to Robot.__init__
-        Robot.__init__(self, config)
-        self._config = config
-        self.cameras = make_cameras_from_configs(config.cameras)
-        
-        self._left_piper = None
-        self._right_piper = None
-        
-        self._setup_constants()
-
-    @property
-    def _motors_ft(self) -> dict[str, type]:
-        """Define the motor features for both arms"""
-        motor_features = {}
-        for arm in ["left", "right"]:
-            for i in range(1, 7):
-                motor_features[f"{arm}_joint_{i}"] = float
-            motor_features[f"{arm}_gripper"] = float
-        return motor_features
-
-    @property
-    def is_connected(self) -> bool:
-        arms_connected = (self._left_piper is not None) and (self._right_piper is not None)
-        cameras_connected = all(cam.is_connected for cam in self.cameras.values())
-        return arms_connected and cameras_connected
-
-    def connect(self, calibrate: bool = True) -> None:
-        try:
-            # Connect Left Arm
-            logger.info(f"Connecting to LEFT arm on CAN port: {self._config.left_arm_port}")
-            self._left_piper = C_PiperInterface_V2(self._config.left_arm_port)
-            self._left_piper.ConnectPort()
-
-            # Connect Right Arm
-            logger.info(f"Connecting to RIGHT arm on CAN port: {self._config.right_arm_port}")
-            self._right_piper = C_PiperInterface_V2(self._config.right_arm_port)
-            self._right_piper.ConnectPort()
-
-            # Connect cameras
-            for cam in self.cameras.values():
-                cam.connect()
-
-            logger.info("BiPiper robot connected successfully")
-
-        except Exception as e:
-            logger.error(f"Failed to connect to BiPiper robot: {e}")
-            raise
-
-    def disconnect(self) -> None:
-        try:
-            # Disconnect Left
-            if self._left_piper is not None:
-                try:
-                    self._left_piper.DisconnectPort()
-                    logger.info("Left arm disconnected")
-                except Exception as e:
-                    logger.warning(f"Error disconnecting left arm: {e}")
-                self._left_piper = None
-            
-            # Disconnect Right
-            if self._right_piper is not None:
-                try:
-                    self._right_piper.DisconnectPort()
-                    logger.info("Right arm disconnected")
-                except Exception as e:
-                    logger.warning(f"Error disconnecting right arm: {e}")
-                self._right_piper = None
-
-            for cam in self.cameras.values():
-                cam.disconnect()
-
-            logger.info("BiPiper robot disconnected successfully")
-
-        except Exception as e:
-            logger.error(f"Error during BiPiper robot disconnect: {e}")
-
-    def get_observation(self) -> dict:
-        if not self.is_connected:
-            raise RuntimeError("BiPiper robot is not connected")
-
-        observation = {}
-
-        # --- Left Arm ---
-        l_joint_msgs = self._left_piper.GetArmJointMsgs()
-        l_gripper_msgs = self._left_piper.GetArmGripperMsgs()
-        self._parse_joint_messages(l_joint_msgs, "state", observation, prefix="left_")
-        self._parse_gripper_messages(l_gripper_msgs, "state", observation, prefix="left_")
-
-        # --- Right Arm ---
-        r_joint_msgs = self._right_piper.GetArmJointMsgs()
-        r_gripper_msgs = self._right_piper.GetArmGripperMsgs()
-        self._parse_joint_messages(r_joint_msgs, "state", observation, prefix="right_")
-        self._parse_gripper_messages(r_gripper_msgs, "state", observation, prefix="right_")
-
-        # --- Cameras ---
-        for cam_name, cam in self.cameras.items():
-            observation[cam_name] = cam.async_read()
-
-        return observation
-
-    def get_piper_ctrl(self) -> dict[str, Any]:
-        if not self.is_connected:
-            raise RuntimeError("BiPiper robot is not connected")
-
-        ctrl = {}
-
-        # --- Left Arm ---
-        l_joint_ctrl = self._left_piper.GetArmJointCtrl()
-        l_gripper_ctrl = self._left_piper.GetArmGripperCtrl()
-        self._parse_joint_messages(l_joint_ctrl, "action", ctrl, prefix="left_")
-        self._parse_gripper_messages(l_gripper_ctrl, "action", ctrl, prefix="left_")
-
-        # --- Right Arm ---
-        r_joint_ctrl = self._right_piper.GetArmJointCtrl()
-        r_gripper_ctrl = self._right_piper.GetArmGripperCtrl()
-        self._parse_joint_messages(r_joint_ctrl, "action", ctrl, prefix="right_")
-        self._parse_gripper_messages(r_gripper_ctrl, "action", ctrl, prefix="right_")
-
-        return ctrl
-
-    def send_action(self, action: dict) -> None:
-        """
-        Send action to the BiPiper arms. 
-        Note: Placeholder for lead-through recording where action is not applied.
-        """
-        if not self.is_connected:
-            raise RuntimeError("BiPiper robot is not connected")
         pass

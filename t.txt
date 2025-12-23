@@ -1,3 +1,16 @@
+python record.py \
+    --robot.type=bi_piper \
+    --robot.left_arm_port=can0 \
+    --robot.right_arm_port=can1 \
+    --robot.id=bi-piper-bot \
+    --display_data=true \
+    --dataset.video=true \
+    --dataset.num_episodes=5 \
+    --dataset.single_task="pick up all cubes and place it into the box using dual arms" \
+    --dataset.episode_time_s=30 \
+    --dataset.reset_time_s=8 \
+    --dataset.repo_id=gmingyng/bipiper-
+
 python -m lerobot.record \
         --robot.type=piper \
         --robot.port=can0 \
