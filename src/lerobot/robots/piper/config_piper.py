@@ -52,6 +52,31 @@ class PiperConfig(RobotConfig):
         }
     )
 
+# def _get_bi_piper_default_cameras() -> dict[str, OpenCVCameraConfig]:
+#     return {
+#         "cam_high": OpenCVCameraConfig(
+#             index_or_path=0,
+#             fps=30,
+#             width=640,
+#             height=480,
+#         ),
+#         "cam_left_wrist": OpenCVCameraConfig(
+#             index_or_path=1,
+#             fps=30,
+#             width=640,
+#             height=480,
+#         ),
+#         "cam_right_wrist": OpenCVCameraConfig(
+#             index_or_path=2,
+#             fps=30,
+#             width=640,
+#             height=480,
+#         ),
+#     }
+
+
+@RobotConfig.register_subclass("bi_piper")
+@dataclass
 class BiPiperConfig(RobotConfig):
     left_arm_port: str = "can0"
     right_arm_port: str = "can1"

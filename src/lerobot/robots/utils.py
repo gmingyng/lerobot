@@ -69,6 +69,10 @@ def make_robot_from_config(config: RobotConfig) -> Robot:
         from .piper import Piper
 
         return Piper(config)
+    elif config.type == "bi_piper":
+        from .piper import BiPiper
+
+        return BiPiper(config)
     else:
         raise ValueError(config.type)
 
