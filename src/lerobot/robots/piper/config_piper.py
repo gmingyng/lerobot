@@ -85,19 +85,19 @@ class BiPiperConfig(RobotConfig):
         default_factory=lambda: {
             "cam_right_wrist": OpenCVCameraConfig(
                 index_or_path=10,
-                fps=30,
+                fps=15,
                 width=640,
                 height=480,
             ),
             "cam_left_wrist": OpenCVCameraConfig(
                 index_or_path=5,
-                fps=30,
+                fps=15,
                 width=640,
                 height=480,
             ),    
             "cam_high": OpenCVCameraConfig(
                 index_or_path=4,
-                fps=30,
+                fps=15,
                 width=640,
                 height=480,
             ),    
