@@ -70,11 +70,13 @@ from pathlib import Path
 
 import numpy as np
 import rerun as rr
+import rerun.blueprint as rrb
 import torch
 import torch.utils.data
 import tqdm
 
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
+from lerobot.utils.visualization_utils import _tactile_entity_path, log_rerun_tactile_data
 
 
 class EpisodeSampler(torch.utils.data.Sampler):
@@ -134,6 +136,27 @@ def visualize_dataset(
     spawn_local_viewer = mode == "local" and not save
     rr.init(f"{repo_id}/episode_{episode_index}", spawn=spawn_local_viewer)
 
+    tactile_names = None
+    if "tactile" in dataset.features:
+        tactile_feature = dataset.features["tactile"]
+        tactile_size = int(np.prod(tactile_feature["shape"]))
+        feature_names = tactile_feature.get("names")
+        if feature_names and len(feature_names) == tactile_size:
+            tactile_names = [str(name) for name in feature_names]
+        else:
+            tactile_names = [f"channel_{dim_idx}" for dim_idx in range(tactile_size)]
+
+        rr.send_blueprint(
+            rrb.Blueprint(
+                rrb.TimeSeriesView(
+                    name="Tactile",
+                    origin="/",
+                    contents=[f"/{_tactile_entity_path(name)}" for name in tactile_names],
+                ),
+                auto_views=True,
+            )
+        )
+
     # Manually call python garbage collector after `rr.init` to avoid hanging in a blocking flush
     # when iterating on a dataloader with `num_workers` > 0
     # TODO(rcadene): remove `gc.collect` when rerun version 0.16 is out, which includes a fix
@@ -164,6 +187,12 @@ def visualize_dataset(
             if "observation.state" in batch:
                 for dim_idx, val in enumerate(batch["observation.state"][i]):
                     rr.log(f"state/{dim_idx}", rr.Scalar(val.item()))
+
+            if tactile_names is not None and "tactile" in batch:
+                log_rerun_tactile_data(
+                    batch["tactile"][i].detach().cpu().numpy(),
+                    tactile_names,
+                )
 
             if "next.done" in batch:
                 rr.log("next.done", rr.Scalar(batch["next.done"][i].item()))

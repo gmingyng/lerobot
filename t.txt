@@ -1,3 +1,33 @@
+双臂 Piper + 双 USB 触觉录制（在 lerobot-0.3.3 根目录运行）
+PYTHONPATH=src python -m lerobot.record_tac \
+    --robot.type=piper \
+    --robot.id=piper-bot \
+    --tactile.ports='[/dev/ttyCH341USB0,/dev/ttyCH341USB1]' \
+    --tactile.baudrate=115200 \
+    --display_data=true \
+    --dataset.video=true \
+    --dataset.num_episodes=50 \
+    --dataset.single_task="pick up tape" \
+    --dataset.repo_id=gmingyng/piper-tac-tape
+
+PYTHONPATH=src python -m lerobot.record_tac \
+    --robot.type=piper \
+    --robot.port=can0 \
+    --robot.id=piper-bot \
+    --tactile.ports='[/dev/ttyCH341USB0]' \
+    --tactile.baudrate=115200 \
+    --display_data=true \
+    --dataset.video=true \
+    --dataset.num_episodes=50 \
+    --dataset.single_task="pick up cup" \
+    --dataset.repo_id=gmingyng/piper-tac-cup
+
+测试
+PYTHONPATH=src python -m lerobot.test_tactile \
+    --port /dev/ttyCH341USB0 \
+    --once \ 
+    --no-clear
+
 python record.py \
     --robot.type=bi_piper \
     --robot.id=bi-piper-bot \
@@ -80,4 +110,3 @@ lerobot-record \
     --dataset.num_episodes=2 \
     --dataset.single_task="Grab the cube" \
     --display_data=true
-
